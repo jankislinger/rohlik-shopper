@@ -1,105 +1,122 @@
 import datetime
+import functools
 import os
-import random
-import time
 
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.firefox.options import Options
+import requests
 
 BASE_URL = "https://www.rohlik.cz"
+FRONTEND_SERVICE = f"{BASE_URL}/services/frontend-service"
+LOGIN_URL = f"{FRONTEND_SERVICE}/login"
+URL_CART = f"{FRONTEND_SERVICE}/v2/cart"
+
+LOGIN_TTL = datetime.timedelta(minutes=30)
+CART_CACHE_TTL = datetime.timedelta(minutes=5)
+
 SCREENSHOTS_URL = os.environ.get("SCREENSHOTS_URL", "screenshots")
 
 
 class Rohlik:
-    def __init__(self, email, password, headless):
+    def __init__(self, email, password):
         self._email = email
         self._password = password
         self._last_login = None
 
-        options = Options()
-        options.headless = headless
-        self._driver = webdriver.Firefox("/usr/local/bin/", options=options)
-        self._driver.set_window_size(1440, 1440)
+        self._session = requests.Session()
 
-        self._sleep_interval = (0.1, 0.2)
+        self._cart_items = None
+        self._cart_items_last_update = None
 
-    def login(self):
-        self._navigate(f"{BASE_URL}/uzivatel/profil")
-        self._sleep()
+        self._login()
 
-        if "prihlaseni" not in self._driver.current_url:
-            # already logged in
-            return
+    def add_item(self, slug, add_amt=None, target_amt=None):
+        if (target_amt is None) is (add_amt is None):
+            raise ValueError("Exactly one of 'add_amt' and 'target_amt' has to be specified.")
 
-        self._click_on_button("Allow all")  # hide cookies
-        self._fill_input("email", self._email)
-        self._fill_input("password", self._password)
-        self._click_on_button("Přihlásit se")
+        item_id = int(slug.split("-")[0])
+
+        self._update_cart(force=True)
+        already_in_cart = item_id in self._cart_items
+
+        if target_amt is None:
+            assert add_amt is not None  # just for IDE
+            current_amt = 0
+            if already_in_cart:
+                current_amt = self._cart_items[item_id]["quantity"]
+            target_amt = current_amt + add_amt
+
+        if already_in_cart:
+            data = {
+                "cartItemId": self._cart_items[item_id]["orderFieldId"],
+                "quantity": target_amt,
+            }
+            response = self._session.put(URL_CART, json=data)
+        else:
+            data = {
+                "productId": item_id,
+                "quantity": target_amt,
+                "source": f"true:ProductCategory:{get_product_category(item_id)}",
+                "actionId": None,
+                "recipeId": None
+            }
+            response = self._session.post(URL_CART, json=data)
+
+        if response.status_code != 200:
+            print("already_in_cart", already_in_cart)
+            print(data)
+            print(response.text)
+        response.raise_for_status()
+        self._update_cart_from_response(response.json())
+
+    def get_cart(self):
+        # TODO: not force if used for periodical update
+        self._update_cart(force=False)
+        return list(self._cart_items.values())
+
+    def _login(self):
+        data = {"email": self._email, "password": self._password, "name": ""}
+        response = self._session.post(LOGIN_URL, json=data)
+        response.raise_for_status()
+        # TODO: save number of express & unlimited orders
         self._last_login = datetime.datetime.now()
-        self._sleep()
 
-    def ensure_logged_in(self):
-        if self._has_recently_logged_in():
+    def _ensure_logged_in(self):
+        if timestamp_is_recent(self._last_login, LOGIN_TTL):
+            # recently logged in
             return
-        self.login()
+        # TODO: checked if logged in via api
+        self._login()
 
-    def add_item(self, slug, amount=1):
-        self.ensure_logged_in()
-        self._navigate(f"{BASE_URL}/{slug}")
-        self.save_screenshot()
-
-        failures = 0
-        while amount > 0 and failures <= 1:
-            clicked = self._click_on_button("Přidat jeden kus.", "aria-label")
-            if clicked:
-                amount -= 1
-            else:
-                failures += 1
-
-        if amount > 0:
-            print(f"Failed to insert requested amount of {slug}, {amount} missing.")
-
-    def save_screenshot(self):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        norm_url = self._driver.current_url.rsplit("/", 1)[-1]
-        file_name = f"{SCREENSHOTS_URL}/{timestamp}-{norm_url}.png"
-
-        num_retries = 5
-        while not self._driver.save_screenshot(file_name):
-            num_retries -= 1
-            print(f"Failed to save screenshot; will retry {num_retries} times")
-            self._sleep()
-            if num_retries <= 0:
-                break
-
-    def close(self):
-        self._driver.close()
-
-    def _navigate(self, url, reload=False):
-        if not reload and self._driver.current_url == url:
+    def _update_cart(self, force):
+        if not force and timestamp_is_recent(self._cart_items_last_update, CART_CACHE_TTL):
+            print("Cart should be up-to-date")
             return
-        self._driver.get(url)
-        self._sleep()
 
-    def _has_recently_logged_in(self, max_delay=datetime.timedelta(minutes=30)):
-        if self._last_login is None:
-            return False
-        return self._last_login + max_delay >= datetime.datetime.now()
+        self._ensure_logged_in()
+        response = self._session.get(URL_CART)
+        if response.status_code != 200:
+            print(response.status_code)
+            print(response.text)
+        response.raise_for_status()
+        self._update_cart_from_response(response.json())
 
-    def _fill_input(self, input_id, value):
-        element = self._driver.find_element(By.ID, input_id)
-        element.send_keys(value)
-        self._sleep()
+    def _update_cart_from_response(self, response):
+        cart_items = response["data"].get("items", {})
+        self._cart_items = {int(k): v for k, v in cart_items.items()}
+        self._cart_items_last_update = datetime.datetime.now()
 
-    def _click_on_button(self, value, attribute="innerText"):
-        buttons = self._driver.find_elements(By.TAG_NAME, "button")
-        for button in buttons:
-            if button.get_attribute(attribute) == value:
-                button.click()
-                self._sleep()
-                return True
+
+def timestamp_is_recent(timestamp, max_delay):
+    if timestamp is None:
         return False
+    return timestamp + max_delay >= datetime.datetime.now()
 
-    def _sleep(self):
-        time.sleep(random.uniform(*self._sleep_interval))
+
+@functools.lru_cache
+def get_product_category(product_id):
+    url = f"{FRONTEND_SERVICE}/product/{product_id}/full?preview=false"
+    response = requests.get(url)
+    if response.status_code != 200:
+        print(response.text)
+    response.raise_for_status()
+    response = response.json()
+    return response["data"]["product"]["categories"][-1]["id"]
