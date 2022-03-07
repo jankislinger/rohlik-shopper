@@ -28,44 +28,31 @@ class Rohlik:
 
         self._login()
 
-    def add_item(self, slug, add_amt=None, target_amt=None):
-        if (target_amt is None) is (add_amt is None):
-            raise ValueError("Exactly one of 'add_amt' and 'target_amt' has to be specified.")
-
+    def add_item(self, slug, qty=None):
         item_id = int(slug.split("-")[0])
-
         self._update_cart(force=True)
-        already_in_cart = item_id in self._cart_items
 
-        if target_amt is None:
-            assert add_amt is not None  # just for IDE
-            current_amt = 0
-            if already_in_cart:
-                current_amt = self._cart_items[item_id]["quantity"]
-            target_amt = current_amt + add_amt
+        if item_id not in self._cart_items:
+            self._add_item_to_cart(item_id, qty)
+            return
 
-        if already_in_cart:
-            data = {
-                "cartItemId": self._cart_items[item_id]["orderFieldId"],
-                "quantity": target_amt,
-            }
-            response = self._session.put(URL_CART, json=data)
-        else:
-            data = {
-                "productId": item_id,
-                "quantity": target_amt,
-                "source": f"true:ProductCategory:{get_product_category(item_id)}",
-                "actionId": None,
-                "recipeId": None
-            }
-            response = self._session.post(URL_CART, json=data)
+        current_qty = self._cart_items[item_id]["quantity"]
+        target_qty = current_qty + qty
+        self._update_item_qty_in_cart(item_id, target_qty),
 
-        if response.status_code != 200:
-            print("already_in_cart", already_in_cart)
-            print(data)
-            print(response.text)
-        response.raise_for_status()
-        self._update_cart_from_response(response.json())
+    def set_item_qty(self, item_slug: str, qty: int):
+        item_id = int(item_slug.split("-", 1)[0])
+        self._update_cart(force=True)
+
+        if item_id not in self._cart_items:
+            self._add_item_to_cart(item_id, qty)
+            return
+
+        current_qty = self._cart_items[item_id]["quantity"]
+        if current_qty >= qty:
+            return
+
+        self._update_item_qty_in_cart(item_id, qty),
 
     def get_cart(self):
         # TODO: not force if used for periodical update
@@ -103,6 +90,29 @@ class Rohlik:
         cart_items = response["data"].get("items", {})
         self._cart_items = {int(k): v for k, v in cart_items.items()}
         self._cart_items_last_update = datetime.datetime.now()
+
+    def _update_item_qty_in_cart(self, item_id, qty):
+        # assumes updated cart & item in cart
+        data = {
+            "cartItemId": self._cart_items[item_id]["orderFieldId"],
+            "quantity": qty,
+        }
+        response = self._session.put(URL_CART, json=data)
+        response.raise_for_status()
+        self._update_cart_from_response(response.json())
+
+    def _add_item_to_cart(self, item_id, qty):
+        # assumes updated cart
+        data = {
+            "productId": item_id,
+            "quantity": qty,
+            "source": f"true:ProductCategory:{get_product_category(item_id)}",
+            "actionId": None,
+            "recipeId": None
+        }
+        response = self._session.post(URL_CART, json=data)
+        response.raise_for_status()
+        self._update_cart_from_response(response.json())
 
 
 def timestamp_is_recent(timestamp, max_delay):
