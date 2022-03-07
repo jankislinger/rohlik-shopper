@@ -21,11 +21,21 @@ def index():
     return jsonify({})
 
 
-@app.route("/add_item/<string:item>", defaults={'amount': 1})
-@app.route("/add_item/<string:item>/<int:amount>")
-def add_item(item, amount):
-    rohlik.add_item(item, add_amt=amount)
-    return jsonify({"text": f"Successfully added {amount} {item}(s)."})
+@app.route("/add_item/<string:item_slug>/<int:qty>/<string:alias>")
+def add_item(item_slug, qty, alias):
+    rohlik.add_item(item_slug, qty, alias)
+    return jsonify({"text": "Successfully added item."})
+
+
+@app.route("/set_item_qty/<string:item_slug>/<int:qty>/<string:alias>")
+def set_item_qty(item_slug, qty, alias):
+    rohlik.set_item_qty(item_slug, qty, alias)
+    return jsonify({"text": "Successfully added set quantity."})
+
+
+@app.route("/latest_update")
+def latest_update():
+    return jsonify(rohlik.get_latest_update())
 
 
 @app.route("/cart")

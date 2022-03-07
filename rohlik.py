@@ -26,38 +26,50 @@ class Rohlik:
         self._cart_items = None
         self._cart_items_last_update = None
 
+        self._updates = []
+
         self._login()
 
-    def add_item(self, slug, qty=None):
-        item_id = int(slug.split("-")[0])
+    def add_item(self, item_slug: str, qty: int, alias: str):
+        item_id = int(item_slug.split("-")[0])
         self._update_cart(force=True)
 
         if item_id not in self._cart_items:
             self._add_item_to_cart(item_id, qty)
+            self._updates.append((alias, qty))
             return
 
         current_qty = self._cart_items[item_id]["quantity"]
         target_qty = current_qty + qty
         self._update_item_qty_in_cart(item_id, target_qty),
+        self._updates.append((alias, qty))
 
-    def set_item_qty(self, item_slug: str, qty: int):
+    def set_item_qty(self, item_slug: str, qty: int, alias: str):
         item_id = int(item_slug.split("-", 1)[0])
         self._update_cart(force=True)
 
         if item_id not in self._cart_items:
             self._add_item_to_cart(item_id, qty)
+            self._updates.append((alias, qty))
             return
 
         current_qty = self._cart_items[item_id]["quantity"]
         if current_qty >= qty:
             return
 
-        self._update_item_qty_in_cart(item_id, qty),
+        self._update_item_qty_in_cart(item_id, qty)
+        self._updates.append((alias, qty - current_qty))
 
     def get_cart(self):
         # TODO: not force if used for periodical update
         self._update_cart(force=False)
         return list(self._cart_items.values())
+
+    def get_latest_update(self):
+        if not self._updates:
+            return {"updated": False}
+        alias, qty = self._updates.pop(0)
+        return {"updated": True, "alias": alias, "quantity": qty}
 
     def _login(self):
         data = {"email": self._email, "password": self._password, "name": ""}
