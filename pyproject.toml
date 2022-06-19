@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "\"Automates shopping on rohlik.cz\""
 authors = ["Jan Kislinger <jan.kislinger@gmail.com>"]
 
+[tool.black]
+line-length = 120
+
 [tool.poetry.dependencies]
 python = "^3.8"
 Flask = "^2.0.2"

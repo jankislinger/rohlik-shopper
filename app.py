@@ -1,19 +1,14 @@
-import os
-
 from flask import Flask, jsonify
 
-from rohlik import Rohlik
-
-if "ROHLIK_EMAIL" not in os.environ:
-    from dotenv import load_dotenv
-    load_dotenv()
+from rohlik_shopper.client import RohlikClient
+from rohlik_shopper.credentials import RohlikCredentials
+from rohlik_shopper.session import RohlikSession
 
 app = Flask(__name__)
 
-rohlik = Rohlik(
-    email=os.environ["ROHLIK_EMAIL"],
-    password=os.environ["ROHLIK_PASSWORD"],
-)
+credentials = RohlikCredentials.from_environ(use_dotenv=True)
+session = RohlikSession("https://www.rohlik.cz/services/frontend-service")
+rohlik = RohlikClient(credentials, session)
 
 
 @app.route("/")
@@ -22,25 +17,30 @@ def index():
 
 
 @app.route("/add_item/<string:item_slug>/<int:qty>/<string:alias>")
-def add_item(item_slug, qty, alias):
-    rohlik.add_item(item_slug, qty, alias)
+def add_item(item_slug, qty, alias=None):
+    # alias is deprecated
+    item_id = int(item_slug.split("-", 1)[0])
+    rohlik.add_items(item_id, qty)
     return jsonify({"text": "Successfully added item."})
 
 
 @app.route("/set_item_qty/<string:item_slug>/<int:qty>/<string:alias>")
-def set_item_qty(item_slug, qty, alias):
-    rohlik.set_item_qty(item_slug, qty, alias)
+def set_item_qty(item_slug, qty, alias=None):
+    # alias is deprecated
+    item_id = int(item_slug.split("-", 1)[0])
+    rohlik.add_items(item_id, qty)
     return jsonify({"text": "Successfully added set quantity."})
 
 
 @app.route("/latest_update")
 def latest_update():
-    return jsonify(rohlik.get_latest_update())
+    # deprecated
+    return jsonify({"updated": False})
 
 
 @app.route("/cart")
 def cart():
-    cart_items = rohlik.get_cart()
+    cart_items = list(rohlik.cart.items.values())
     return jsonify({"cart_items": cart_items})
 
 
