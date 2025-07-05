@@ -14,7 +14,7 @@ class RohlikCredentials:
         self.password = HiddenString(self.password)
 
     @classmethod
-    def from_environ(cls, use_dotenv=False):
+    def from_environ(cls, *, use_dotenv=False):
         """Create object using credentials from environment variables."""
         import os
 

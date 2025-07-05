@@ -68,11 +68,10 @@ class RohlikClient:
         return self._cart
 
     def _add_new_items_to_cart(self, product_id: int, quantity: int):
-        category = self._product_category(product_id)
         data = {
             "productId": product_id,
             "quantity": quantity,
-            "source": f"true:ProductCategory:{category}",
+            "source": f"true:Product Detail:{product_id}",
             "actionId": None,
             "recipeId": None,
         }
@@ -87,13 +86,3 @@ class RohlikClient:
     def _update_cart(self):
         cart_data = self._session.get("v2/cart")
         self._cart.update_from_response(cart_data)
-
-    def _product_category(self, product_id: int) -> str:
-        detail = self._product_detail(product_id)
-        return detail["product"]["categories"][-1]["id"]
-
-    def _product_detail(self, product_id: int) -> dict:
-        if product_id not in self._product_cache:
-            response = self._session.get(f"product/{product_id}/full?preview=false")
-            self._product_cache[product_id] = response["data"]
-        return self._product_cache[product_id]
