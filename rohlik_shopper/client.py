@@ -52,6 +52,14 @@ class RohlikClient:
         self._update_item_quantity_in_cart(item_cart_id, quantity)
         return quantity - current_quantity
 
+    def search(self, query: str):
+        params = {
+            "search": query,
+            "referer": "whisperer",
+            "companyId":1,
+        }
+        return self._session.get("autocomplete", params)
+
     @property
     def cart(self):
         """Get cart object."""
