@@ -7,7 +7,7 @@ from rohlik_shopper.session import RohlikSession
 app = Flask(__name__)
 
 credentials = RohlikCredentials.from_environ(use_dotenv=True)
-session = RohlikSession("https://www.rohlik.cz/services/frontend-service")
+session = RohlikSession()
 rohlik = RohlikClient(credentials, session)
 
 

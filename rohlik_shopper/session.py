@@ -2,11 +2,12 @@ from typing import Any
 
 import requests
 
+DEFAULT_BASE_URL = "https://www.rohlik.cz/services/frontend-service"
 
 class RohlikSession:
     """Wrapper around request.Session."""
 
-    def __init__(self, base_url):
+    def __init__(self, base_url=DEFAULT_BASE_URL):
         self._base_url = base_url
         self._session = requests.Session()
 
