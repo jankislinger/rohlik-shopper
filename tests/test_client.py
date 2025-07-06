@@ -11,11 +11,17 @@ def client() -> RohlikClient:
     return RohlikClient(cred, RohlikSession())
 
 
-
 def test_search(client: RohlikClient):
     response = client.search("rohlík")
     print(response)
 
+
 def test_adding_item(client: RohlikClient):
     response = client.add_items(1423422, 2)
+    print(response)
+
+
+def test_favourite_items(client: RohlikClient):
+    client.login()
+    response = client.list_favourite_items(15)
     print(response)

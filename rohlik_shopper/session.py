@@ -4,6 +4,7 @@ import requests
 
 DEFAULT_BASE_URL = "https://www.rohlik.cz/services/frontend-service"
 
+
 class RohlikSession:
     """Wrapper around request.Session."""
 
@@ -14,6 +15,14 @@ class RohlikSession:
     def get(self, endpoint, params=None) -> Any:
         """Send GET request."""
         response = self._session.get(self._url(endpoint), params=params)
+        response.raise_for_status()
+        return response.json()
+
+    def get_api(self, endpoint, params=None) -> Any:
+        """Send GET request."""
+        # TODO: fix in base URL so that we don't need two methods
+        url = self._url(endpoint).replace("services/frontend-service", "api")
+        response = self._session.get(url, params=params)
         response.raise_for_status()
         return response.json()
 

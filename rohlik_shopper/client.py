@@ -56,9 +56,16 @@ class RohlikClient:
         params = {
             "search": query,
             "referer": "whisperer",
-            "companyId":1,
+            "companyId": 1,
         }
         return self._session.get("autocomplete", params)
+
+    def list_favourite_items(self, num_items: int) -> list[dict]:
+        params = {"page": 0, "size": num_items, "sort": "recommended"}
+        response = self._session.get_api("v1/categories/favorite/products", params)
+        product_ids = response["productIds"]
+        return self._session.get_api("v1/products", {"products": product_ids})
+
 
     @property
     def cart(self):
